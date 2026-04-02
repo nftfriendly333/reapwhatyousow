@@ -212,7 +212,7 @@ footer span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:va
         <button class="ltab" id="ltab-register" onclick="setMode('register')">Register</button>
       </div>
       <div class="login-form">
-        <div class="info-box hidden" id="reg-info">New accounts start with <span style="color:var(--gold);">100 $PvE</span>. Balance visible to all on the shared ledger.</div>
+        <div class="info-box hidden" id="reg-info">New accounts start with <span style="color:var(--gold);">1000 $PvE locked 🔒</span>. Unstake anytime with a 25% fee to the Team Treasury.</div>
         <div class="field"><label>Username</label><input class="inp" id="l-user" placeholder="e.g. alice" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <div class="field"><label>Password</label><input class="inp" type="password" id="l-pass" placeholder="min 4 characters" onkeydown="if(event.key==='Enter')doLogin()"></div>
         <div id="reg-fields" class="hidden">
@@ -296,7 +296,7 @@ footer span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:va
         <div class="cd-unit"><span class="cd-val" id="cd-s">--</span><div class="cd-lbl">Secs</div></div>
       </div>
       <div class="cdown-info">
-        <span style="color:var(--gold);">+0.007 $ETH</span> per wallet &nbsp;·&nbsp; <span style="color:var(--gold);">0.002 $ETH</span> burned / tx
+        <span style="color:var(--gold);">+0.000005 $ETH</span> drip per wallet<br><span style="color:var(--gold);">0.000000015 $ETH</span> burned / tx<br><span style="color:var(--goldb);">1000 $PvE locked · unstake with 25% fee</span>
       </div>
     </div>
 
@@ -370,7 +370,7 @@ footer span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:va
 <div class="modal-bg hidden" id="modal-add">
   <div class="modal">
     <div class="modal-title">Add New Wallet</div>
-    <div style="font-size:11px;color:var(--dim);margin-bottom:14px;line-height:1.7;">Register a wallet as recipient. They start with <span style="color:var(--gold);">100 $PvE</span>.</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:14px;line-height:1.7;">Register a wallet as recipient. They start with <span style="color:var(--gold);">1000 $PvE locked 🔒</span>. Unstake anytime with a 25% fee.</div>
     <div style="background:var(--s2);border:1px solid var(--bdr2);border-radius:2px;padding:12px;margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);">Wallet Slots</span>
@@ -417,7 +417,9 @@ footer span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:va
 // ════════════════════════════════════
 // CONSTANTS & STATE
 // ════════════════════════════════════
-const FEE=0.002,BLOCK_START=1;
+const FEE=0.000000015,ETH_DRIP=0.000005,UNSTAKE_FEE=0.25,BLOCK_START=1;
+const TEAM_WALLET_ID='team-treasury';
+const TEAM_WALLET={id:TEAM_WALLET_ID,name:'Team Treasury',addr:'0xTEAM...VAULT',balance:0,locked:0,eth:0.1,paused:false,pending:0,tag:'Team Wallet',color:'#e879f9',isUser:false};
 const PALETTE=['#d4a843','#e07b7b','#7bade0','#7be09a','#c07be0','#e0c37b','#e08c7b','#7be0d4','#b07be0','#e0d47b'];
 const TX_STYLE={
   send:{bg:'rgba(192,57,43,0.12)',c:'#c0392b',b:'rgba(192,57,43,0.2)',l:'SEND'},
@@ -426,10 +428,12 @@ const TX_STYLE={
   auto:{bg:'rgba(192,132,252,0.1)',c:'#c084fc',b:'rgba(192,132,252,0.2)',l:'AUTO'},
   withdraw:{bg:'rgba(76,175,110,0.1)',c:'#4caf6e',b:'rgba(76,175,110,0.25)',l:'WITHDRAW'},
   register:{bg:'rgba(127,179,245,0.08)',c:'#7fb3f5',b:'rgba(127,179,245,0.2)',l:'JOINED'},
+  unlock:{bg:'rgba(76,175,110,0.1)',c:'#4caf6e',b:'rgba(76,175,110,0.25)',l:'UNLOCK'},
+  unstake:{bg:'rgba(192,57,43,0.12)',c:'#c0392b',b:'rgba(192,57,43,0.2)',l:'UNSTAKE'},
 };
 const SEEDS=[];
 
-let ST={wallets:JSON.parse(JSON.stringify(SEEDS)),ledger:[],blockNum:BLOCK_START,totalVol:0,totalRewards:0,totalWithdrawn:0};
+let ST={wallets:[JSON.parse(JSON.stringify(TEAM_WALLET)),...JSON.parse(JSON.stringify(SEEDS))],ledger:[],blockNum:BLOCK_START,totalVol:0,totalRewards:0,totalWithdrawn:0};
 let session=null,dripReady=false,saveTimer=null,pollTimer=null,cdTimer=null;
 let rules=[],ruleId=1,currentTab='automation',loginMode='login';
 
@@ -452,7 +456,7 @@ function toast(t,m,d=4000){$('toast-t').textContent=t;$('toast-m').textContent=m
 async function loadS(k){if(!window.storage)return null;try{const r=await window.storage.get(k,true);return r?JSON.parse(r.value):null;}catch{return null;}}
 async function saveS(k,v){if(!window.storage)return;try{await window.storage.set(k,JSON.stringify(v),true);}catch{/* storage unavailable */}}
 function scheduleSave(){if(saveTimer)clearTimeout(saveTimer);saveTimer=setTimeout(async()=>{await saveS('rwys-state',{wallets:ST.wallets,blockNum:ST.blockNum,totalVol:ST.totalVol,totalRewards:ST.totalRewards,totalWithdrawn:ST.totalWithdrawn});await saveS('rwys-ledger',ST.ledger.slice(0,200));},800);}
-async function loadAll(){const st=await loadS('rwys-state'),ld=await loadS('rwys-ledger');if(st?.wallets?.length){ST.wallets=st.wallets;ST.blockNum=st.blockNum||BLOCK_START;ST.totalVol=st.totalVol||0;ST.totalRewards=st.totalRewards||0;ST.totalWithdrawn=st.totalWithdrawn||0;}if(ld?.length)ST.ledger=ld;}
+async function loadAll(){const st=await loadS('rwys-state'),ld=await loadS('rwys-ledger');if(st&&!st.wallets?.find(w=>w.id===TEAM_WALLET_ID)){if(st.wallets)st.wallets.unshift(JSON.parse(JSON.stringify(TEAM_WALLET)));}if(st?.wallets?.length){ST.wallets=st.wallets;ST.blockNum=st.blockNum||BLOCK_START;ST.totalVol=st.totalVol||0;ST.totalRewards=st.totalRewards||0;ST.totalWithdrawn=st.totalWithdrawn||0;}if(ld?.length)ST.ledger=ld;}
 function startPoll(){pollTimer=setInterval(async()=>{const st=await loadS('rwys-state'),ld=await loadS('rwys-ledger');if(st?.wallets){ST.wallets=st.wallets;ST.blockNum=st.blockNum||BLOCK_START;ST.totalVol=st.totalVol||0;ST.totalRewards=st.totalRewards||0;ST.totalWithdrawn=st.totalWithdrawn||0;}if(ld)ST.ledger=ld;renderAll();},3000);}
 
 // ════════════════════════════════════
@@ -490,7 +494,7 @@ async function doLogin(){
       showErr('Wallet address already registered to another account.');return;
     }
     const wid='wu'+Date.now();
-    const nw={id:wid,name:dn,addr:wa,balance:100,eth:0.1,paused:false,pending:0,tag:'Registered User',color:PALETTE[ST.wallets.length%PALETTE.length],isUser:true};
+    const nw={id:wid,name:dn,addr:wa,balance:0,locked:1000,eth:0.1,paused:false,pending:0,tag:'Registered User',color:PALETTE[ST.wallets.length%PALETTE.length],isUser:true};
     ST.blockNum++;ST.wallets.push(nw);
     ST.ledger.unshift({block:ST.blockNum,hash:genHash(),type:'mint',from:'PROTOCOL',to:dn,amount:100,time:new Date().toISOString()});
     if(ST.ledger.length>200)ST.ledger.length=200;
@@ -538,12 +542,30 @@ function startApp(){
 const myW=()=>ST.wallets.find(w=>w.id===session?.walletId)||null;
 
 // ════════════════════════════════════
+// TUESDAY DRIP
+// ════════════════════════════════════
+let lastDripDate = null;
+function fireTuesdayDrip(){
+  const today = new Date().toDateString();
+  if(lastDripDate === today) return; // only fire once per day
+  lastDripDate = today;
+  let anyChange = false;
+  ST.wallets.forEach((w,i)=>{
+    // ETH drip only — locked $PvE stays locked until unstake
+    const newEth = Math.min(0.1, r4((ST.wallets[i].eth||0) + ETH_DRIP));
+    if(newEth !== ST.wallets[i].eth){ ST.wallets[i] = {...ST.wallets[i], eth: newEth}; anyChange = true; }
+  });
+  if(ST.ledger.length>200) ST.ledger.length=200;
+  if(anyChange){ scheduleSave(); renderAll(); toast('Tuesday Drip','+0.000005 $ETH dripped to all wallets'); }
+}
+
+// ════════════════════════════════════
 // COUNTDOWN
 // ════════════════════════════════════
 function startCountdown(){
   const tick=()=>{
     const ms=msTillDrip();
-    if(ms<1000){dripReady=true;$('cd-digits').innerHTML='<div class="drip-live">DRIP LIVE — WITHDRAW NOW</div>';renderHUD();renderRegistry();return;}
+    if(ms<1000){if(!dripReady)fireTuesdayDrip();dripReady=true;$('cd-digits').innerHTML='<div class="drip-live">DRIP LIVE — WITHDRAW NOW</div>';renderHUD();renderRegistry();return;}
     const s=~~(ms/1000);
     $('cd-d').textContent=String(~~(s/86400)).padStart(2,'0');
     $('cd-h').textContent=String(~~((s%86400)/3600)).padStart(2,'0');
@@ -596,7 +618,7 @@ function renderStats(){
 // ════════════════════════════════════
 function wdHTML(id,pending,small){
   const rdy=dripReady&&pending>0;
-  const lbl=rdy?`⬆ WITHDRAW${small?'':' '+pending.toFixed(4)} $PvE`:'⏳ LOCKED UNTIL TUESDAY';
+  const lbl=rdy?`⬆ WITHDRAW${small?'':' '+pending.toFixed(4)} $PvE`:'⏳ NO PENDING WITHDRAWAL';
   return `<button class="btn-wd${rdy?' ready':''}" ${rdy?`onclick="event.stopPropagation();doWithdraw('${id}')"`:' disabled'}>${lbl}</button>`;
 }
 function renderHUD(){
@@ -607,6 +629,7 @@ function renderHUD(){
   const pct=Math.min(100,w.eth/0.1*100);
   const ec=w.eth<0.02?'#c0392b':w.eth<0.05?'#f59e0b':'var(--purple)';
   const emsg=w.eth<0.02?'⚠ Critical — sends will fail':w.eth<0.05?'△ Low — drips back on Tuesday':'✓ Ready to send';
+  const locked = w.locked||0;
   $('hud-body').innerHTML=`
     <div class="hud-wallet-info">
       <div class="hud-name">${w.name}</div>
@@ -617,13 +640,18 @@ function renderHUD(){
     </div>
     <div class="hud-balances">
       <div class="hud-bal-item">
-        <div class="hbl">$PvE Balance</div>
+        <div class="hbl">$PvE Unlocked</div>
         <div class="hud-num" style="color:var(--goldb);">${fmt(w.balance,4)}</div>
-        <div class="hud-sub">simulated</div>
+        <div class="hud-sub">available</div>
+      </div>
+      <div class="hud-bal-item">
+        <div class="hbl">$PvE Locked 🔒</div>
+        <div class="hud-num" style="color:var(--dim);">${fmt(locked,4)}</div>
+        <div class="hud-sub">unlocks Tuesday</div>
       </div>
       <div class="hud-bal-item">
         <div class="hbl">$ETH (gas)</div>
-        <div class="hud-num" style="color:var(--purple);">${w.eth.toFixed(4)}</div>
+        <div class="hud-num" style="color:var(--purple);">${w.eth.toFixed(6)}</div>
         <div class="hud-sub">max 0.1</div>
       </div>
       ${w.pending>0?`<div class="hud-bal-item"><div class="hbl">Pending</div><div class="hud-num" style="color:var(--green);">${w.pending.toFixed(4)}</div><div class="hud-sub">$PvE queued</div></div>`:''}
@@ -633,6 +661,11 @@ function renderHUD(){
       <div class="eth-bar"><div class="eth-fill" style="width:${pct}%;background:linear-gradient(90deg,${ec},#e879f9);"></div></div>
       <div class="eth-status" style="color:${ec};">${emsg}</div>
       ${wdHTML(w.id,w.pending,false)}
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;background:rgba(192,57,43,.06);border:1px solid rgba(192,57,43,.2);border-radius:2px;">
+      <div style="font-size:9px;color:var(--red);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px;">Early Unstake</div>
+      <div style="font-size:10px;color:var(--dim);margin-bottom:8px;line-height:1.6;">Withdraw all $PvE now — 25% fee goes to Team Treasury. You receive <b style="color:var(--text);">${fmt(r4((w.balance+locked)*0.75),4)} $PvE</b> and <b style="color:var(--red);">${fmt(r4((w.balance+locked)*0.25),4)} $PvE</b> → Team Treasury.</div>
+      <button onclick="confirmUnstake('${w.id}')" style="width:100%;background:transparent;border:1px solid rgba(192,57,43,.4);color:var(--red);font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.1em;padding:9px;border-radius:2px;"">⚠ UNSTAKE EARLY (−25%)</button>
     </div>`;
 }
 
@@ -661,10 +694,11 @@ function renderRegistry(){
         <div>
           <div style="font-size:9px;color:var(--dim);margin-bottom:2px;">$PvE</div>
           <div class="wcard-bal" style="opacity:${w.paused?.45:1};">${fmt(w.balance,2)}</div>
+          ${(w.locked||0)>0?`<div style="font-size:9px;color:var(--dim);">🔒 ${fmt(w.locked,2)} locked</div>`:''}
         </div>
         <div>
           <div style="font-size:9px;color:var(--dim);margin-bottom:2px;">$ETH</div>
-          <div class="wcard-eth" style="opacity:${w.paused?.45:1};font-size:18px;font-family:'Bebas Neue',sans-serif;">${w.eth.toFixed(3)}</div>
+          <div class="wcard-eth" style="opacity:${w.paused?.45:1};font-size:18px;font-family:'Bebas Neue',sans-serif;">${w.eth.toFixed(6)}</div>
         </div>
       </div>
       ${w.pending>0?`<div style="font-size:10px;color:var(--green);margin-top:4px;">⬆ ${w.pending.toFixed(4)} pending</div>`:''}
@@ -677,6 +711,42 @@ function renderRegistry(){
       ${wdHTML(w.id,w.pending,true)}
     </div>`;
   }).join('');
+}
+
+// ════════════════════════════════════
+// UNSTAKE (early withdrawal with 25% fee)
+// ════════════════════════════════════
+function confirmUnstake(id){
+  const w = ST.wallets.find(x=>x.id===id);
+  if(!w) return;
+  const total = r4((w.balance||0)+(w.locked||0));
+  const fee = r4(total*0.25);
+  const gets = r4(total-fee);
+  if(confirm(`Unstake early?\n\nYou will receive: ${gets.toFixed(4)} $PvE\nBurned (25% fee): ${fee.toFixed(4)} $PvE\n\nThis cannot be undone.`)){
+    doUnstake(id);
+  }
+}
+function doUnstake(id){
+  const i = ST.wallets.findIndex(w=>w.id===id);
+  if(i<0) return;
+  const w = ST.wallets[i];
+  const total = r4((w.balance||0) + (w.locked||0));
+  if(total <= 0){ toast('Nothing to Unstake','No $PvE balance'); return; }
+  const fee = r4(total * UNSTAKE_FEE);
+  const received = r4(total - fee);
+  // Deduct from user
+  ST.wallets[i] = {...w, balance: 0, locked: 0, pending: 0};
+  // Send fee to team treasury
+  const ti = ST.wallets.findIndex(x=>x.id===TEAM_WALLET_ID);
+  if(ti>=0) ST.wallets[ti] = {...ST.wallets[ti], balance: r4((ST.wallets[ti].balance||0)+fee)};
+  ST.blockNum++;
+  ST.ledger.unshift({block:ST.blockNum,hash:genHash(),type:'unstake',from:w.name,to:'Team Treasury',amount:fee,time:new Date().toISOString()});
+  ST.blockNum++;
+  ST.ledger.unshift({block:ST.blockNum,hash:genHash(),type:'withdraw',from:w.name,to:'WITHDRAWN',amount:received,time:new Date().toISOString()});
+  if(ST.ledger.length>200) ST.ledger.length=200;
+  ST.totalWithdrawn = r4(ST.totalWithdrawn + received);
+  scheduleSave(); renderAll();
+  toast('Unstaked Early',`${received.toFixed(4)} $PvE withdrawn · ${fee.toFixed(4)} $PvE → Team Treasury`);
 }
 
 // ════════════════════════════════════
@@ -791,7 +861,7 @@ async function submitAdd(){
   if(added>=MAX_WALLETS){closeAdd();showLimitModal();return;}
   // Add wallet
   const id='wa'+Date.now();
-  ST.wallets.push({id,name:n,addr:a,balance:100,eth:0.1,paused:false,pending:0,tag:'Added Wallet',color:PALETTE[ST.wallets.length%PALETTE.length],isUser:true});
+  ST.wallets.push({id,name:n,addr:a,balance:0,locked:1000,eth:0.1,paused:false,pending:0,tag:'Added Wallet',color:PALETTE[ST.wallets.length%PALETTE.length],isUser:true});
   ST.blockNum++;
   ST.ledger.unshift({block:ST.blockNum,hash:genHash(),type:'mint',from:'PROTOCOL',to:n,amount:100,time:new Date().toISOString()});
   if(ST.ledger.length>200)ST.ledger.length=200;
